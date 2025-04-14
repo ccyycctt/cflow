@@ -1,0 +1,45 @@
+name: Build ARM Docker Image
+
+on:
+  push:
+    tags:
+      - 'v*'  # 触发条件：当推送带v开头的标签时执行
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # 步骤1：检出代码
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 步骤2：配置QEMU和Buildx（支持ARM架构）
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: network=host
+
+      # 步骤3：构建ARM镜像
+      - name: Build ARM image with Buildx
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/arm64  # 指定ARM64架构
+          tags: memo:arm          # 镜像名称
+          load: true              # 将镜像加载到本地Docker环境
+          cache-from: type=gha    # 启用缓存加速构建
+          cache-to: type=gha,mode=max
+
+      # 步骤4：将镜像保存为tar文件
+      - name: Save image as tar
+        run: docker save -o low.tar memo:arm
+
+      # 步骤5：上传到Releases
+      - name: Upload to Releases
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "low.tar"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref_name }}  # 使用触发工作流的标签名
