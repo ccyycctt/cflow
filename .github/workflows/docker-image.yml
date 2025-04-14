@@ -36,10 +36,11 @@ jobs:
       - name: Save image as tar
         run: docker save -o low.tar memo:arm
 
-      # 步骤5：上传到Releases
       - name: Upload to Releases
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "low.tar"
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ github.ref_name }}  # 使用触发工作流的标签名
+           artifacts: "armmemos.tar"
+           token: ${{ secrets.GITHUB_TOKEN }}
+           tag: ${{ github.ref_name }}
+           skipIfReleaseExists: true  # 跳过已有Release
+           replaceArtifacts: true      # 覆盖旧文件（若需更新）
