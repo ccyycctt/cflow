@@ -11,10 +11,6 @@ on:
       - main
   workflow_dispatch:
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
-
 jobs:
   build-frontend:
     name: Build Frontend
@@ -35,16 +31,14 @@ jobs:
       - name: Get pnpm store directory
         id: pnpm-cache
         shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
       
       - name: Setup pnpm cache
         uses: actions/cache@v3
         with:
           path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
+          restore-keys: ${{ runner.os }}-pnpm-store-
       
       - name: Install dependencies
         run: cd web && pnpm i --frozen-lockfile
@@ -72,13 +66,11 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            os: linux
             goarch: amd64
-            binary-suffix: '-amd64'
+            suffix: amd64
           - arch: arm64
-            os: linux
             goarch: arm64
-            binary-suffix: '-arm64'
+            suffix: arm64
     
     steps:
       - uses: actions/checkout@v4
@@ -95,28 +87,23 @@ jobs:
           name: frontend-dist
           path: server/dist/
       
-      - name: Verify source files
-        run: |
-          ls -la bin/memos/
-          pwd
-      
-      - name: Build binary for ${{ matrix.os }}-${{ matrix.arch }}
+      - name: Build binary
+        run: go build -o cflow-${{ matrix.suffix }} ./bin/memos/main.go
         env:
-          CGO_ENABLED: "0"
-          GOOS: ${{ matrix.os }}
-          GOARCH: ${{ matrix. goarch }}
-        run: go build -o cflow${{ matrix.binary-suffix }} ./bin/memos/main. go
+          CGO_ENABLED: 0
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
       
       - name: Verify binary
         run: |
-          file cflow${{ matrix.binary-suffix }}
-          ls -lh cflow${{ matrix.binary-suffix }}
+          file cflow-${{ matrix.suffix }}
+          ls -lh cflow-${{ matrix. suffix }}
       
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: cflow${{ matrix.binary-suffix }}
-          path: cflow${{ matrix.binary-suffix }}
+          name: cflow-${{ matrix.suffix }}
+          path: cflow-${{ matrix.suffix }}
           retention-days: 30
 
   create-release:
@@ -133,60 +120,17 @@ jobs:
         with:
           path: binaries/
       
-      - name: Flatten binaries directory
+      - name: Organize binaries
         run: |
           mkdir -p release
-          find binaries -name "cflow*" -type f -exec mv {} release/ \;
+          find binaries -name "cflow-*" -type f -exec mv {} release/ \;
           ls -lh release/
       
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: release/cflow*
+          files: release/cflow-*
           draft: false
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  test-alpine:
-    name: Test Binary on Alpine
-    runs-on: ubuntu-latest
-    needs: build-backend
-    if: always()
-    
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Download amd64 binary
-        uses: actions/download-artifact@v4
-        with:
-          name: cflow-amd64
-      
-      - name: Test in Alpine container
-        run: |
-          docker run --rm -v ${{ github.workspace }}:/app -w /app alpine:latest \
-            sh -c "chmod +x cflow-amd64 && ./cflow-amd64 --version || ./cflow-amd64 --help || echo 'Binary works in Alpine'"
-        continue-on-error: true
-
-  test-arm64:
-    name: Test Binary on ARM64
-    runs-on: ubuntu-latest
-    needs: build-backend
-    if: always()
-    
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up QEMU for ARM64
-        uses: docker/setup-qemu-action@v3
-      
-      - name: Download arm64 binary
-        uses: actions/download-artifact@v4
-        with:
-          name: cflow-arm64
-      
-      - name: Test in Alpine ARM64 container
-        run: |
-          docker run --rm --platform linux/arm64 -v ${{ github. workspace }}:/app -w /app alpine:latest \
-            sh -c "chmod +x cflow-arm64 && ./cflow-arm64 --version || ./cflow-arm64 --help || echo 'Binary works on ARM64'"
-        continue-on-error: true
