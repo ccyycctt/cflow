@@ -1,4 +1,4 @@
-name: Build Binary for Alpine and Termux
+name: 2Build Binary for Alpine and Termux
 
 on:
   push:
