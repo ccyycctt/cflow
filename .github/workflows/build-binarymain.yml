@@ -22,14 +22,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Setup Node. js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'pnpm'
       
       - name: Install pnpm
-        run: corepack enable
+        uses: pnpm/action-setup@v2
+        with:
+          version: latest
+      
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+      
+      - name: Setup pnpm cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ steps.pnpm-cache. outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
       
       - name: Install dependencies
         run: |
@@ -91,7 +106,7 @@ jobs:
           CGO_ENABLED=0 \
           GOOS=${{ matrix.os }} \
           GOARCH=${{ matrix.goarch }} \
-          go build -o cflow${{ matrix.binary-suffix }} ./bin/memos/main.go
+          go build -o cflow${{ matrix.binary-suffix }} ./bin/memos/main. go
         env:
           GO111MODULE: "on"
       
@@ -175,6 +190,6 @@ jobs:
       
       - name: Test in Alpine ARM64 container
         run: |
-          docker run --rm --platform linux/arm64 -v ${{ github. workspace }}:/app -w /app alpine:latest \
+          docker run --rm --platform linux/arm64 -v ${{ github.workspace }}:/app -w /app alpine:latest \
             sh -c "chmod +x cflow-arm64 && ./cflow-arm64 --version || ./cflow-arm64 --help || echo 'Binary works on ARM64'"
         continue-on-error: true
