@@ -1,8 +1,9 @@
+name: Build and Release Linux Binaries
 
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*' # 例如 v1.0.0
 
 jobs:
   build:
@@ -11,7 +12,7 @@ jobs:
     strategy:
       matrix:
         arch: [amd64, arm64]
-        go-version: [1.20]
+        go-version: ['1.20']
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -21,11 +22,6 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
 
-      - name: Print environment
-        run: |
-          go version
-          echo "Building for arch: ${{ matrix.arch }}"
-
       - name: Build binary and package tar.gz
         env:
           GOOS: linux
@@ -33,15 +29,17 @@ jobs:
         run: |
           set -e
           mkdir -p dist
-          echo "CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -trimpath -o dist/cflow-linux-${GOARCH} ./..."
-          CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -trimpath -o dist/cflow-linux-${GOARCH} ./...
-          tar -czf dist/cflow-linux-${GOARCH}.tar.gz -C dist cflow-linux-${GOARCH}
-          ls -lah dist
+          BIN_NAME=cflow-linux-${GOARCH}
+          echo "Building ${BIN_NAME}..."
+          # 修改下面的 build 命令以匹配你的项目结构（如果 main 包不在根目录，调整 ./...）
+          CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -trimpath -o dist/${BIN_NAME} ./...
+          tar -C dist -czf dist/${BIN_NAME}.tar.gz ${BIN_NAME}
+          ls -lh dist
 
-      - name: Upload build artifact to Actions (per-arch)
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: cflow-linux-${{ matrix.arch }}
+          name: cflow-${{ matrix.arch }}
           path: dist/cflow-linux-${{ matrix.arch }}.tar.gz
 
   release:
@@ -60,9 +58,11 @@ jobs:
       - name: Upload artifacts to GitHub Release
         uses: ncipollo/release-action@v1
         with:
-           artifacts: "dist/*.tar.gz"
-           token: ${{ secrets.GITHUB_TOKEN }}
-           tag: ${{ github.ref_name }}
-           name: "cflow - linux/amd64,linux/arm64"
-           skipIfReleaseExists: false
-           replaceArtifacts: true
+          # 上传所有打包好的 tar.gz（它们按文件名为 cflow-linux-<platform>.tar.gz）
+          artifacts: "dist/*.tar.gz"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref_name }}
+          # Release 名称：项目名 + 支持平台（两个平台会放在同一个 Release 中）
+          name: "cflow - linux/amd64,linux/arm64"
+          skipIfReleaseExists: false
+          replaceArtifacts: true
