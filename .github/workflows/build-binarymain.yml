@@ -1,4 +1,4 @@
-name: 2Build Binary for Alpine and Termux
+name: Build Binary for Alpine and Termux
 
 on:
   push:
@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
 
 env:
-  REGISTRY: ghcr. io
+  REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
@@ -41,25 +41,19 @@ jobs:
       - name: Setup pnpm cache
         uses: actions/cache@v3
         with:
-          path: ${{ steps.pnpm-cache. outputs.STORE_PATH }}
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
       
       - name: Install dependencies
-        run: |
-          cd web
-          pnpm i --frozen-lockfile
+        run: cd web && pnpm i --frozen-lockfile
       
       - name: Generate types
-        run: |
-          cd web
-          pnpm type-gen
+        run: cd web && pnpm type-gen
       
       - name: Build frontend
-        run: |
-          cd web
-          pnpm build
+        run: cd web && pnpm build
         env:
           NODE_OPTIONS: "--max-old-space-size=4096"
       
@@ -101,14 +95,17 @@ jobs:
           name: frontend-dist
           path: server/dist/
       
-      - name: Build binary for ${{ matrix.os }}-${{ matrix.arch }}
+      - name: Verify source files
         run: |
-          CGO_ENABLED=0 \
-          GOOS=${{ matrix.os }} \
-          GOARCH=${{ matrix.goarch }} \
-          go build -o cflow${{ matrix.binary-suffix }} ./bin/memos/main. go
+          ls -la bin/memos/
+          pwd
+      
+      - name: Build binary for ${{ matrix.os }}-${{ matrix.arch }}
         env:
-          GO111MODULE: "on"
+          CGO_ENABLED: "0"
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix. goarch }}
+        run: go build -o cflow${{ matrix.binary-suffix }} ./bin/memos/main. go
       
       - name: Verify binary
         run: |
@@ -190,6 +187,6 @@ jobs:
       
       - name: Test in Alpine ARM64 container
         run: |
-          docker run --rm --platform linux/arm64 -v ${{ github.workspace }}:/app -w /app alpine:latest \
+          docker run --rm --platform linux/arm64 -v ${{ github. workspace }}:/app -w /app alpine:latest \
             sh -c "chmod +x cflow-arm64 && ./cflow-arm64 --version || ./cflow-arm64 --help || echo 'Binary works on ARM64'"
         continue-on-error: true
