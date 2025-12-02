@@ -3,7 +3,7 @@ name: Build ARM Docker Image
 on:
   push:
     tags:
-      - 'v*'  # 触发条件：当推送带v开头的标签时执行
+      - 'v1.5'  # 触发条件：当推送带v开头的标签时执行
 
 jobs:
   build:
