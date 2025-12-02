@@ -1,46 +1,71 @@
-name: Build ARM Docker Image
+name: Go Build and Release
 
 on:
   push:
     tags:
-      - 'v*'  # 触发条件：当推送带v开头的标签时执行
+      - "v*"  # 仅 v 开头的 tag 触发
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        platform:
+          - { os: linux, goos: linux, goarch: amd64, suffix: "" }
+          - { os: linux, goos: linux, goarch: arm64, suffix: "-arm64" }
     steps:
-      # 步骤1：检出代码
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      # 步骤2：配置QEMU和Buildx（支持ARM架构）
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@v4
         with:
-          driver-opts: network=host
+          fetch-depth: 0
 
-      # 步骤3：构建ARM镜像
-      - name: Build ARM image with Buildx
-        uses: docker/build-push-action@v5
+      - name: Set up Go
+        uses: actions/setup-go@v4
         with:
-          context: .
-          platforms: linux/arm64  # 指定ARM64架构
-          tags: memo:arm          # 镜像名称
-          load: true              # 将镜像加载到本地Docker环境
-          cache-from: type=gha    # 启用缓存加速构建
-          cache-to: type=gha,mode=max
+          go-version: '1.24'
 
-      # 步骤4：将镜像保存为tar文件
-      - name: Save image as tar
-        run: docker save -o low.tar memo:arm
+      - name: Build
+        env:
+          GOOS: ${{ matrix.platform.goos }}
+          GOARCH: ${{ matrix.platform.goarch }}
+          CGO_ENABLED: 0  # 静态编译
+        run: |
+          output_name="main-${{ matrix.platform.goos }}-${{ matrix.platform.goarch }}${{ matrix.platform.suffix }}"
+          go build -v -o $output_name .
+          echo "BINARY_NAME=$output_name" >> $GITHUB_ENV
 
-      - name: Upload to Releases
-        uses: ncipollo/release-action@v1
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4  
         with:
-           artifacts: "armmemos.tar"
-           token: ${{ secrets.GITHUB_TOKEN }}
-           tag: ${{ github.ref_name }}
-           skipIfReleaseExists: true  # 跳过已有Release
-           replaceArtifacts: true      # 覆盖旧文件（若需更新）
+          name: ${{ env.BINARY_NAME }}
+          path: ${{ env.BINARY_NAME }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4  # 同步升级到 v4
+        with:
+          path: artifacts
+          merge-multiple: true  # 关键修复：合并文件
+
+      - name: Verify Files
+        run: ls -R artifacts  # 调试用
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/main-darwin-amd64-darwin
+            artifacts/main-darwin-arm64-darwin-arm64
+            artifacts/main-linux-amd64
+            artifacts/main-linux-arm64-arm64
+            artifacts/main-windows-amd64.exe
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
